@@ -10,7 +10,7 @@ const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 type Loc = { lat: number; lon: number; label?: string };
 
-const DEFAULT_LOC: Loc = { lat: 40.7128, lon: -74.006, label: "New York, NY" };
+const DEFAULT_LOC: Loc = { lat: 37.3861, lon: -122.0839, label: "Mountain View, CA" };
 
 export default function Home() {
   const [loc, setLoc] = useState<Loc | null>(null);
@@ -36,8 +36,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    locate();
-  }, [locate]);
+    setLoc(DEFAULT_LOC);
+  }, []);
 
   useEffect(() => {
     if (!loc) return;
