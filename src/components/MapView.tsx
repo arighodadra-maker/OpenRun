@@ -1,16 +1,27 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Court } from "@/lib/courts";
-import { estimateBusyness, hourlyForecast } from "@/lib/busyness";
+import { estimateBusyness, hourlyForecast, prominence, minProminenceForZoom } from "@/lib/busyness";
 
 function Recenter({ lat, lon, zoom }: { lat: number; lon: number; zoom?: number }) {
   const map = useMap();
   useEffect(() => {
     map.setView([lat, lon], zoom ?? map.getZoom(), { animate: true });
   }, [lat, lon, zoom, map]);
+  return null;
+}
+
+function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    onZoom(map.getZoom());
+  }, [map, onZoom]);
+  useMapEvents({
+    zoomend: () => onZoom(map.getZoom()),
+  });
   return null;
 }
 
@@ -35,6 +46,12 @@ export default function MapView({
   onSelect?: (c: Court) => void;
 }) {
   const now = useMemo(() => new Date(), []);
+  const [zoom, setZoom] = useState(13);
+  const minProm = minProminenceForZoom(zoom);
+  const visible = useMemo(
+    () => courts.filter((c) => c.id === selectedId || prominence(c) >= minProm),
+    [courts, minProm, selectedId]
+  );
 
   return (
     <MapContainer center={[center.lat, center.lon]} zoom={13} style={{ height: "100%", width: "100%" }}>
@@ -43,6 +60,7 @@ export default function MapView({
         url="https://tile.openstreetmap.org/{z}/{y}/{x}.png"
       />
       <Recenter lat={center.lat} lon={center.lon} />
+      <ZoomTracker onZoom={setZoom} />
 
       <CircleMarker
         center={[center.lat, center.lon]}
@@ -52,7 +70,7 @@ export default function MapView({
         <Popup>You are here</Popup>
       </CircleMarker>
 
-      {courts.map((c) => {
+      {visible.map((c) => {
         const b = estimateBusyness(c, now);
         const icon = makeIcon(b.color, String(b.mid));
         return (

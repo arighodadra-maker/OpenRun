@@ -9,6 +9,32 @@
 
 import type { Court } from "./courts";
 
+// Prominence score 0..~10 — used to hide obscure courts at low zooms.
+// Signals: has a real name, more hoops, lit, indoor/covered (implies real facility),
+// public access. Untagged random pitches score lowest.
+export function prominence(c: Court): number {
+  let s = 0;
+  if (c.name && c.name !== "Basketball court") s += 3;
+  if (c.hoops) s += Math.min(3, c.hoops); // 1..3
+  if (c.lit) s += 1.5;
+  if (c.indoor) s += 2;
+  else if (c.covered) s += 1;
+  if (c.surface && c.surface !== "dirt" && c.surface !== "grass") s += 0.5;
+  if (c.access === "private") s -= 1;
+  return s;
+}
+
+// Given a Leaflet zoom level, return the minimum prominence a court needs to be visible.
+// zoom ~16 (street): show everything. zoom ~10 (metro): only marquee courts.
+export function minProminenceForZoom(zoom: number): number {
+  if (zoom >= 15) return -Infinity;
+  if (zoom >= 14) return 1;
+  if (zoom >= 13) return 2.5;
+  if (zoom >= 12) return 4;
+  if (zoom >= 11) return 6;
+  return 8;
+}
+
 // Base hourly demand curve (0-23), normalized 0..1. Rough shape of pickup runs.
 const HOUR_CURVE = [
   0.02, 0.01, 0.01, 0.01, 0.01, 0.02, // 0-5 dead
