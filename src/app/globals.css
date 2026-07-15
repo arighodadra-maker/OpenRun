@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "leaflet/dist/leaflet.css";
+
+html, body { height: 100%; background: #0a0a0a; color: #f5f5f5; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+.leaflet-container { background: #111; }
+.leaflet-tile { filter: brightness(0.85) contrast(1.05); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #171717; color: #f5f5f5; }
+.leaflet-popup-content { margin: 10px 12px; font-size: 13px; }
+
+.court-marker {
+  width: 28px; height: 28px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #0a0a0a;
+  border: 2px solid #0a0a0a; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
