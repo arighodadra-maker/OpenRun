@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { DAY_LABELS, decodeSlots, emptySlots, encodeSlots, type Slots } from "@/lib/availability";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default function AvailabilityGrid() {
   const [slots, setSlots] = useState<Slots>(() => emptySlots());
   const [copied, setCopied] = useState(false);
+  const [savedToAccount, setSavedToAccount] = useState(false);
   const dragMode = useRef<"paint" | "erase" | null>(null);
+  const userId = useRef<string | null>(null);
+  const hydrated = useRef(false);
 
   // Load from URL on mount
   useEffect(() => {
@@ -17,6 +22,27 @@ export default function AvailabilityGrid() {
     if (!s && stored) setSlots(decodeSlots(stored));
   }, []);
 
+  // If logged in, load the account's saved availability (it wins over URL/local).
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      hydrated.current = true;
+      return;
+    }
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (data.user) {
+        userId.current = data.user.id;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("availability")
+          .eq("id", data.user.id)
+          .single();
+        if (profile?.availability) setSlots(decodeSlots(profile.availability));
+      }
+      hydrated.current = true;
+    });
+  }, []);
+
   // Persist locally + update URL (replace, not push, to avoid history bloat)
   useEffect(() => {
     const encoded = encodeSlots(slots);
@@ -24,6 +50,22 @@ export default function AvailabilityGrid() {
     const url = new URL(window.location.href);
     url.searchParams.set("cal", encoded);
     window.history.replaceState(null, "", url.toString());
+  }, [slots]);
+
+  // Save to the logged-in user's profile (debounced) so pairing can compare it.
+  useEffect(() => {
+    if (!userId.current || !hydrated.current) return;
+    setSavedToAccount(false);
+    const encoded = encodeSlots(slots);
+    const t = setTimeout(async () => {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ availability: encoded, updated_at: new Date().toISOString() })
+        .eq("id", userId.current!);
+      if (!error) setSavedToAccount(true);
+    }, 700);
+    return () => clearTimeout(t);
   }, [slots]);
 
   function toggle(d: number, h: number, mode?: "paint" | "erase") {
@@ -65,6 +107,7 @@ export default function AvailabilityGrid() {
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm text-neutral-400">
           {total} hour{total === 1 ? "" : "s"} marked
+          {savedToAccount && <span className="text-court ml-2">· saved ✓</span>}
         </div>
         <div className="flex gap-2">
           <button
@@ -101,8 +144,8 @@ export default function AvailabilityGrid() {
             </div>
           ))}
           {DAY_LABELS.map((label, d) => (
-            <>
-              <div key={`l${d}`} className="text-xs text-neutral-400 pr-2 py-[2px]">
+            <Fragment key={d}>
+              <div className="text-xs text-neutral-400 pr-2 py-[2px]">
                 {label}
               </div>
               {Array.from({ length: 24 }, (_, h) => {
@@ -125,7 +168,7 @@ export default function AvailabilityGrid() {
                   />
                 );
               })}
-            </>
+            </Fragment>
           ))}
         </div>
       </div>

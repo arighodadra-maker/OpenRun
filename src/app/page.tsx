@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCourts, haversineMeters, type Court } from "@/lib/courts";
 import CourtCard from "@/components/CourtCard";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
+import AuthWidget from "@/components/AuthWidget";
+import CourtGamesModal from "@/components/CourtGamesModal";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -18,6 +20,7 @@ export default function Home() {
   const [courts, setCourts] = useState<Court[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [gamesCourt, setGamesCourt] = useState<Court | null>(null);
 
   const locate = useCallback(() => {
     if (!navigator.geolocation) {
@@ -72,12 +75,15 @@ export default function Home() {
             <div className="text-[11px] text-neutral-500 -mt-0.5">find a hoop near you</div>
           </div>
         </div>
-        <button
-          onClick={locate}
-          className="text-xs px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700"
-        >
-          use my location
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={locate}
+            className="text-xs px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700"
+          >
+            use my location
+          </button>
+          <AuthWidget />
+        </div>
       </header>
 
       {locError && (
@@ -109,6 +115,7 @@ export default function Home() {
                   origin={loc}
                   selected={selectedId === c.id}
                   onClick={() => setSelectedId(c.id)}
+                  onOpenGames={() => setGamesCourt(c)}
                 />
               ))}
           </div>
@@ -140,6 +147,10 @@ export default function Home() {
         Court data © OpenStreetMap contributors · Busyness values are heuristic estimates, not
         real-time occupancy.
       </footer>
+
+      {gamesCourt && (
+        <CourtGamesModal court={gamesCourt} onClose={() => setGamesCourt(null)} />
+      )}
     </main>
   );
 }

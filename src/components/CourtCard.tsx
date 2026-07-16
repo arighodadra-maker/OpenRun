@@ -8,11 +8,13 @@ export default function CourtCard({
   court,
   origin,
   onClick,
+  onOpenGames,
   selected,
 }: {
   court: Court;
   origin: { lat: number; lon: number };
   onClick?: () => void;
+  onOpenGames?: () => void;
   selected?: boolean;
 }) {
   const b = estimateBusyness(court);
@@ -20,9 +22,14 @@ export default function CourtCard({
   const distMi = haversineMeters(origin, { lat: court.lat, lon: court.lon }) / 1609.34;
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className={`w-full text-left p-3 rounded-lg border transition ${
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onClick?.();
+      }}
+      className={`w-full text-left p-3 rounded-lg border transition cursor-pointer ${
         selected
           ? "border-orange-500 bg-neutral-900"
           : "border-neutral-800 bg-neutral-950 hover:bg-neutral-900"
@@ -64,6 +71,16 @@ export default function CourtCard({
         <span>now</span>
         <span>+12h</span>
       </div>
-    </button>
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenGames?.();
+        }}
+        className="mt-2 w-full text-xs py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 font-medium"
+      >
+        🏀 Host / join a game
+      </button>
+    </div>
   );
 }
