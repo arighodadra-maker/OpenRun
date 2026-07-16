@@ -89,6 +89,13 @@ export default function Home() {
     [courts, selectedId]
   );
 
+  // Courts are sorted nearest-first; only render a slice so we don't mount
+  // hundreds of cards + map markers (the main cause of slow loads).
+  const LIST_CAP = 60;
+  const MAP_CAP = 150;
+  const listCourts = useMemo(() => courts.slice(0, LIST_CAP), [courts]);
+  const mapCourts = useMemo(() => courts.slice(0, MAP_CAP), [courts]);
+
   return (
     <main className="min-h-[calc(100vh-3.5rem)] flex flex-col">
       {locError && (
@@ -116,7 +123,9 @@ export default function Home() {
               {loading
                 ? "Scanning OpenStreetMap…"
                 : courts.length
-                ? `${courts.length} within ~6 mi`
+                ? courts.length > LIST_CAP
+                  ? `Nearest ${LIST_CAP} of ${courts.length} within ~6 mi`
+                  : `${courts.length} within ~6 mi`
                 : "No courts found in this radius."}
             </div>
           </div>
@@ -125,7 +134,7 @@ export default function Home() {
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {loc &&
-              courts.map((c) => (
+              listCourts.map((c) => (
                 <CourtCard
                   key={c.id}
                   court={c}
@@ -148,7 +157,7 @@ export default function Home() {
           {loc ? (
             <MapView
               center={selected ? { lat: selected.lat, lon: selected.lon } : loc}
-              courts={courts}
+              courts={mapCourts}
               selectedId={selectedId}
               onSelect={(c) => setSelectedId(c.id)}
             />
