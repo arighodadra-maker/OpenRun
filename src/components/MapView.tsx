@@ -54,10 +54,17 @@ export default function MapView({
   );
 
   return (
-    <MapContainer center={[center.lat, center.lon]} zoom={13} style={{ height: "100%", width: "100%" }}>
+    <MapContainer
+      center={[center.lat, center.lon]}
+      zoom={13}
+      style={{ height: "100%", width: "100%" }}
+      fadeAnimation={false}
+      preferCanvas
+    >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://tile.openstreetmap.org/{z}/{y}/{x}.png"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        keepBuffer={4}
       />
       <Recenter lat={center.lat} lon={center.lon} />
       <ZoomTracker onZoom={setZoom} />
