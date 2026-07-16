@@ -1,5 +1,5 @@
 "use client";
-
+import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo } from "react";
@@ -40,7 +40,7 @@ export default function MapView({
     <MapContainer center={[center.lat, center.lon]} zoom={13} style={{ height: "100%", width: "100%" }}>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://tile.openstreetmap.org/{z}/{y}/{x}.png"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <Recenter lat={center.lat} lon={center.lon} />
 
