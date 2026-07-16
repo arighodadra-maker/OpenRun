@@ -16,7 +16,9 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, full_name, home_court, skill_level, age, years_experience, points, wins, losses")
+    .select(
+      "username, full_name, home_court, skill_level, age, years_experience, points, wins, losses, avatar_emoji, accent_color, bio, fav_position"
+    )
     .eq("id", user.id)
     .single();
 
@@ -38,6 +40,10 @@ export default async function ProfilePage() {
             age: profile?.age != null ? String(profile.age) : "",
             years_experience:
               profile?.years_experience != null ? String(profile.years_experience) : "",
+            avatar_emoji: profile?.avatar_emoji ?? "",
+            accent_color: profile?.accent_color ?? "",
+            bio: profile?.bio ?? "",
+            fav_position: profile?.fav_position ?? "",
           }}
           stats={{
             points: profile?.points ?? 0,

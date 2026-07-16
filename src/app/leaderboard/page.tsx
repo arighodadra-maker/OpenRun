@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { skillBadgeClass } from "@/lib/skill";
+import Avatar from "@/components/Avatar";
 
 export default async function LeaderboardPage() {
   if (!isSupabaseConfigured) redirect("/signup");
@@ -14,7 +15,7 @@ export default async function LeaderboardPage() {
 
   const { data: rows } = await supabase
     .from("profiles")
-    .select("id, full_name, username, skill_level, points, wins, losses")
+    .select("id, full_name, username, skill_level, points, wins, losses, avatar_emoji, accent_color")
     .order("points", { ascending: false })
     .order("wins", { ascending: false })
     .limit(100);
@@ -44,7 +45,8 @@ export default async function LeaderboardPage() {
                   isYou ? "border-court bg-court/10" : "border-neutral-800 bg-neutral-950"
                 }`}
               >
-                <div className="w-7 text-center font-bold text-sm text-neutral-400">{medal}</div>
+                <div className="w-6 text-center font-bold text-sm text-neutral-400">{medal}</div>
+                <Avatar user={p} size={36} />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium truncate">
                     {name} {isYou ? <span className="text-xs text-court">(you)</span> : null}

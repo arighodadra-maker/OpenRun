@@ -30,20 +30,49 @@ export default function Thread({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Re-fetch on every mount so a cached/stale page (e.g. navigating back into
+  // this thread) can never show fewer messages than actually exist.
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("messages")
+      .select("id, sender_id, recipient_id, content, created_at")
+      .or(
+        `and(sender_id.eq.${meId},recipient_id.eq.${other.id}),and(sender_id.eq.${other.id},recipient_id.eq.${meId})`
+      )
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (!cancelled && data) setMessages(data as Message[]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [meId, other.id]);
+
   // Live updates: append messages this person sends me as they arrive.
   // (My own sent messages are appended optimistically in send().)
   useEffect(() => {
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
 
     (async () => {
       // Realtime respects row-level security, so the socket must carry my login
       // token — otherwise protected rows are never delivered.
       const { data } = await supabase.auth.getSession();
+      if (cancelled) return; // effect was cleaned up (e.g. React Strict Mode's
+      // double-invoke in dev) while this await was in flight — bail so we
+      // never subscribe a channel nobody will clean up.
       if (data.session) supabase.realtime.setAuth(data.session.access_token);
 
+      // Unique per connection: reusing the same channel name across two
+      // mounts makes the client hand back an already-subscribed channel,
+      // and calling .on() on that throws "after subscribe()".
+      const uniqueTopic = `dm-${meId}-${other.id}-${Math.random().toString(36).slice(2)}`;
+
       channel = supabase
-        .channel(`dm-${meId}-${other.id}`)
+        .channel(uniqueTopic)
         .on(
           "postgres_changes",
           {
@@ -64,6 +93,7 @@ export default function Thread({
     })();
 
     return () => {
+      cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
   }, [meId, other.id]);

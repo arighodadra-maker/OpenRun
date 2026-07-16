@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCourts, haversineMeters, type Court } from "@/lib/courts";
 import CourtCard from "@/components/CourtCard";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
-import AuthWidget from "@/components/AuthWidget";
 import CourtGamesModal from "@/components/CourtGamesModal";
+import QuestsCard from "@/components/QuestsCard";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
@@ -64,28 +64,7 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-screen flex flex-col">
-      <header className="px-4 py-3 border-b border-neutral-900 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-court flex items-center justify-center text-black font-black">
-            ▲
-          </div>
-          <div>
-            <div className="font-bold tracking-tight">OpenRun</div>
-            <div className="text-[11px] text-neutral-500 -mt-0.5">find a hoop near you</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={locate}
-            className="text-xs px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700"
-          >
-            use my location
-          </button>
-          <AuthWidget />
-        </div>
-      </header>
-
+    <main className="min-h-[calc(100vh-3.5rem)] flex flex-col">
       {locError && (
         <div className="px-4 py-2 text-xs bg-yellow-900/40 text-yellow-200 border-b border-yellow-900">
           {locError}
@@ -95,8 +74,16 @@ export default function Home() {
       <div className="flex-1 grid md:grid-cols-[380px_1fr] min-h-0">
         <aside className="border-r border-neutral-900 flex flex-col min-h-0">
           <div className="p-3 border-b border-neutral-900">
-            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1">
-              Courts near you
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs uppercase tracking-wider text-neutral-500">
+                Courts near you
+              </div>
+              <button
+                onClick={locate}
+                className="text-xs px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
+              >
+                📍 my location
+              </button>
             </div>
             <div className="text-sm text-neutral-300">
               {loading
@@ -105,6 +92,9 @@ export default function Home() {
                 ? `${courts.length} within ~6 mi`
                 : "No courts found in this radius."}
             </div>
+          </div>
+          <div className="p-3 border-b border-neutral-900">
+            <QuestsCard />
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {loc &&

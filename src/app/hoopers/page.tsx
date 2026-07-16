@@ -14,80 +14,85 @@ export default async function HoopersPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: rows } = await supabase
-    .from("profiles")
-    .select("id, username, full_name, home_court, skill_level")
-    .order("updated_at", { ascending: false });
+  const [{ data: rows }, { data: follows }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id, username, full_name, home_court, skill_level, avatar_emoji, accent_color, bio, fav_position"
+      )
+      .order("updated_at", { ascending: false }),
+    supabase.from("follows").select("following_id").eq("follower_id", user.id),
+  ]);
 
+  const followingSet = new Set((follows ?? []).map((f) => f.following_id));
   const hoopers = (rows ?? []) as Hooper[];
   const me = hoopers.find((h) => h.id === user.id);
   const myCourt = normalizeCourt(me?.home_court);
   const others = hoopers.filter((h) => h.id !== user.id);
 
+  const following = others.filter((h) => followingSet.has(h.id));
   const atMyCourt = myCourt
-    ? others.filter((h) => normalizeCourt(h.home_court) === myCourt)
+    ? others.filter((h) => normalizeCourt(h.home_court) === myCourt && !followingSet.has(h.id))
     : [];
-  const elsewhere = others.filter((h) => !atMyCourt.includes(h));
+  const elsewhere = others.filter(
+    (h) => !followingSet.has(h.id) && !atMyCourt.includes(h)
+  );
+
+  const card = (h: Hooper) => (
+    <HooperCard key={h.id} hooper={h} meId={user.id} isFollowing={followingSet.has(h.id)} />
+  );
 
   return (
-    <main className="min-h-screen flex flex-col items-center px-4 py-10">
+    <main className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center px-4 py-8">
       <div className="w-full max-w-lg">
-        <Link href="/" className="text-sm text-neutral-400 hover:text-neutral-200">
-          ← Back to map
-        </Link>
-        <h1 className="text-xl font-semibold mt-4">Hoopers</h1>
+        <h1 className="text-xl font-semibold">Players</h1>
         <p className="text-xs text-neutral-500 mb-6">
-          Other players on OpenRun. Set your home court on your{" "}
-          <Link href="/profile" className="text-court hover:underline">profile</Link> to find
-          people who ball where you do.
+          Find hoopers, add them, and message them to set up a run.
         </p>
 
-        {/* Hoopers at your home court */}
+        {following.length > 0 && (
+          <Section title="Following">{following.map(card)}</Section>
+        )}
+
         {me?.home_court ? (
-          <section className="mb-8">
-            <h2 className="text-xs uppercase tracking-wider text-neutral-500 mb-2">
-              At your home court · {me.home_court}
-            </h2>
+          <Section title={`At your home court · ${me.home_court}`}>
             {atMyCourt.length ? (
-              <div className="space-y-2">
-                {atMyCourt.map((h) => (
-                  <HooperCard key={h.id} hooper={h} />
-                ))}
-              </div>
+              atMyCourt.map(card)
             ) : (
               <p className="text-sm text-neutral-500 rounded-lg border border-dashed border-neutral-800 p-4">
                 No one else has claimed {me.home_court} yet. Invite a friend to sign up!
               </p>
             )}
-          </section>
+          </Section>
         ) : (
-          <section className="mb-8 rounded-lg border border-dashed border-neutral-800 p-4">
+          <div className="mb-8 rounded-lg border border-dashed border-neutral-800 p-4">
             <p className="text-sm text-neutral-400">
               You haven&apos;t set a home court yet.{" "}
               <Link href="/profile" className="text-court hover:underline">Add one</Link> to see
               hoopers who play there.
             </p>
-          </section>
+          </div>
         )}
 
-        {/* Everyone else */}
-        <section>
-          <h2 className="text-xs uppercase tracking-wider text-neutral-500 mb-2">
-            {atMyCourt.length ? "More hoopers" : "All hoopers"}
-          </h2>
+        <Section title={atMyCourt.length || following.length ? "More players" : "All players"}>
           {elsewhere.length ? (
-            <div className="space-y-2">
-              {elsewhere.map((h) => (
-                <HooperCard key={h.id} hooper={h} />
-              ))}
-            </div>
+            elsewhere.map(card)
           ) : (
             <p className="text-sm text-neutral-500">
               No other hoopers have signed up yet — you&apos;re early. 🏀
             </p>
           )}
-        </section>
+        </Section>
       </div>
     </main>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-8">
+      <h2 className="text-xs uppercase tracking-wider text-neutral-500 mb-2">{title}</h2>
+      <div className="space-y-2">{children}</div>
+    </section>
   );
 }
