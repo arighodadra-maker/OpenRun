@@ -21,20 +21,46 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [gamesCourt, setGamesCourt] = useState<Court | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const locate = useCallback(() => {
     if (!navigator.geolocation) {
-      setLocError("Geolocation not supported — showing NYC");
-      setLoc(DEFAULT_LOC);
+      setLocError("Geolocation isn't supported here — showing NYC. You can still search.");
+      setLoc((cur) => cur ?? DEFAULT_LOC);
       return;
     }
+    setLocating(true);
+    setLocError(null);
+
+    const onOk = (pos: GeolocationPosition) => {
+      setLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      setLocError(null);
+      setLocating(false);
+    };
+    const onFail = (err: GeolocationPositionError) => {
+      setLocating(false);
+      const reason =
+        err.code === err.PERMISSION_DENIED
+          ? "Location is blocked — allow it in your browser's site settings"
+          : err.code === err.POSITION_UNAVAILABLE
+          ? "Couldn't determine your location"
+          : "Location timed out";
+      setLocError(`${reason} — showing NYC. Tap “📍 my location” to retry, or just search here.`);
+      setLoc((cur) => cur ?? DEFAULT_LOC);
+    };
+
+    // 1) Fast attempt that will happily reuse a recent cached fix (often instant).
     navigator.geolocation.getCurrentPosition(
-      (pos) => setLoc({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-      (err) => {
-        setLocError(err.message + " — showing NYC. You can still search.");
-        setLoc(DEFAULT_LOC);
-      },
-      { enableHighAccuracy: false, timeout: 8000 }
+      onOk,
+      () =>
+        // 2) If that fails, retry once with high accuracy and a longer window
+        //    before falling back to NYC.
+        navigator.geolocation.getCurrentPosition(onOk, onFail, {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0,
+        }),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 }
     );
   }, []);
 
@@ -80,9 +106,10 @@ export default function Home() {
               </div>
               <button
                 onClick={locate}
-                className="text-xs px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700"
+                disabled={locating}
+                className="text-xs px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 disabled:opacity-60"
               >
-                📍 my location
+                {locating ? "📍 locating…" : "📍 my location"}
               </button>
             </div>
             <div className="text-sm text-neutral-300">
