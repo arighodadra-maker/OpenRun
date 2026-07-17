@@ -16,17 +16,25 @@ export type Court = {
   osmUrl: string;
 };
 
+// Multiple mirrors, raced in parallel — individual Overpass servers are often
+// rate-limited or down, so relying on one or two leaves users with no courts.
 const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.openstreetmap.fr/api/interpreter",
 ];
+
+// Thrown when a mirror responds successfully but with zero courts — so a mirror
+// that DOES have data wins the race instead of a spurious empty response.
+class EmptyResult extends Error {}
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // courts barely change — cache for an hour
 
 function cacheKey(lat: number, lon: number, r: number) {
   // Round to ~100m so tiny GPS jitter still hits the cache.
-  // v2 = courts now include address; bump invalidates older cached shapes.
-  return `openrun.courts.v2.${lat.toFixed(3)},${lon.toFixed(3)},${r}`;
+  // v3 = never cache empty results anymore; bump clears any poisoned empties.
+  return `openrun.courts.v3.${lat.toFixed(3)},${lon.toFixed(3)},${r}`;
 }
 
 function readCache(key: string): Court[] | null {
@@ -75,6 +83,7 @@ export async function fetchCourts(
   const body = "data=" + encodeURIComponent(q);
 
   // Query one endpoint, giving up after 18s (long enough for a big first query).
+  // An empty response is treated as a failure so a mirror WITH courts wins.
   async function hit(url: string): Promise<Court[]> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 18000);
@@ -87,20 +96,27 @@ export async function fetchCourts(
       });
       if (!res.ok) throw new Error("Overpass " + res.status);
       const data = await res.json();
-      return normalize(data.elements ?? []);
+      const courts = normalize(data.elements ?? []);
+      if (courts.length === 0) throw new EmptyResult();
+      return courts;
     } finally {
       clearTimeout(timer);
     }
   }
 
   try {
-    // Race both mirrors — whichever answers first wins, so one slow server
-    // doesn't hold everything up.
+    // Race all mirrors — first one with actual courts wins, so a slow or
+    // rate-limited server doesn't hold everything up.
     const courts = await Promise.any(OVERPASS_ENDPOINTS.map(hit));
-    writeCache(key, courts);
+    writeCache(key, courts); // only ever caches non-empty results
     return courts;
-  } catch {
-    // Every mirror failed/timed out — surface a clean, friendly error.
+  } catch (agg) {
+    const errors: unknown[] = (agg as AggregateError)?.errors ?? [];
+    // If every mirror answered but with zero courts, this area genuinely has
+    // none — return empty (don't cache, so it retries later). Otherwise the
+    // service failed, so surface a friendly retry message.
+    const allEmpty = errors.length > 0 && errors.every((e) => e instanceof EmptyResult);
+    if (allEmpty) return [];
     throw new Error("Court search is slow right now. Tap “📍 my location” to try again.");
   }
 }
