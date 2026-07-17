@@ -3,7 +3,7 @@ import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useRef } from "react";
-import type { Court } from "@/lib/courts";
+import { haversineMeters, type Court } from "@/lib/courts";
 import { estimateBusyness } from "@/lib/busyness";
 
 function Recenter({ lat, lon, zoom }: { lat: number; lon: number; zoom?: number }) {
@@ -19,21 +19,31 @@ function Recenter({ lat, lon, zoom }: { lat: number; lon: number; zoom?: number 
 function FitToCourts({
   center,
   courts,
+  fitKey,
 }: {
   center: { lat: number; lon: number };
   courts: Court[];
+  fitKey: string;
 }) {
   const map = useMap();
-  const fitted = useRef(false);
+  const lastKey = useRef<string>("");
   useEffect(() => {
-    if (fitted.current || courts.length === 0) return;
+    // Re-fit whenever the searched location changes (fitKey), not on every
+    // court selection.
+    if (courts.length === 0 || lastKey.current === fitKey) return;
+    // Guard: if the "nearest" court is far from center, these courts belong to
+    // a previous area and haven't refreshed yet — don't fit across continents.
+    const nearest = Math.min(
+      ...courts.slice(0, 5).map((c) => haversineMeters(center, { lat: c.lat, lon: c.lon }))
+    );
+    if (nearest > 100000) return; // >100km away: stale, wait for the new area's courts
     const points: [number, number][] = [
       [center.lat, center.lon],
       ...courts.slice(0, 12).map((c) => [c.lat, c.lon] as [number, number]),
     ];
     map.fitBounds(points, { padding: [50, 50], maxZoom: 15 });
-    fitted.current = true;
-  }, [courts, center, map]);
+    lastKey.current = fitKey;
+  }, [courts, center, fitKey, map]);
   return null;
 }
 
@@ -65,11 +75,13 @@ function makeIcon(color: string, label: string) {
 export default function MapView({
   center,
   courts,
+  fitKey,
   selectedId,
   onSelect,
 }: {
   center: { lat: number; lon: number };
   courts: Court[];
+  fitKey: string;
   selectedId?: string | null;
   onSelect?: (c: Court) => void;
 }) {
@@ -100,7 +112,7 @@ export default function MapView({
       />
       <FixSize />
       <Recenter lat={center.lat} lon={center.lon} />
-      <FitToCourts center={center} courts={courts} />
+      <FitToCourts center={center} courts={courts} fitKey={fitKey} />
 
       <CircleMarker
         center={[center.lat, center.lon]}

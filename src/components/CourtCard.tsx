@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Court } from "@/lib/courts";
 import { estimateBusyness, hourlyForecast } from "@/lib/busyness";
 import { haversineMeters } from "@/lib/courts";
+import { reverseGeocode } from "@/lib/geocode";
 
 export default function CourtCard({
   court,
@@ -21,6 +23,22 @@ export default function CourtCard({
   const forecast = hourlyForecast(court);
   const distMi = haversineMeters(origin, { lat: court.lat, lon: court.lon }) / 1609.34;
 
+  // Look up a real street address (throttled + cached) when OSM doesn't have one.
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
+  useEffect(() => {
+    if (court.address) return;
+    let cancelled = false;
+    reverseGeocode(court.lat, court.lon).then((a) => {
+      if (!cancelled) setResolvedAddress(a);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [court.address, court.lat, court.lon]);
+
+  const addressLine =
+    court.address ?? resolvedAddress ?? `${court.lat.toFixed(4)}, ${court.lon.toFixed(4)}`;
+
   return (
     <div
       role="button"
@@ -38,9 +56,7 @@ export default function CourtCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-semibold truncate">{court.name}</div>
-          <div className="text-[10px] text-neutral-500 truncate">
-            {court.address ?? `${court.lat.toFixed(4)}, ${court.lon.toFixed(4)}`}
-          </div>
+          <div className="text-[10px] text-neutral-500 truncate">{addressLine}</div>
           <div className="text-xs text-neutral-400 mt-0.5">
             {distMi.toFixed(1)} mi
             {court.hoops ? ` · ${court.hoops} hoops` : ""}
