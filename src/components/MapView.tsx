@@ -2,7 +2,7 @@
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "react-leaflet";
 import L from "leaflet";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Court } from "@/lib/courts";
 import { estimateBusyness } from "@/lib/busyness";
 
@@ -11,6 +11,29 @@ function Recenter({ lat, lon, zoom }: { lat: number; lon: number; zoom?: number 
   useEffect(() => {
     map.setView([lat, lon], zoom ?? map.getZoom(), { animate: true });
   }, [lat, lon, zoom, map]);
+  return null;
+}
+
+// Once courts load, zoom/pan so you AND the nearest courts are all in view —
+// otherwise nearby-but-spread-out courts can sit just off the initial screen.
+function FitToCourts({
+  center,
+  courts,
+}: {
+  center: { lat: number; lon: number };
+  courts: Court[];
+}) {
+  const map = useMap();
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || courts.length === 0) return;
+    const points: [number, number][] = [
+      [center.lat, center.lon],
+      ...courts.slice(0, 12).map((c) => [c.lat, c.lon] as [number, number]),
+    ];
+    map.fitBounds(points, { padding: [50, 50], maxZoom: 15 });
+    fitted.current = true;
+  }, [courts, center, map]);
   return null;
 }
 
@@ -77,6 +100,7 @@ export default function MapView({
       />
       <FixSize />
       <Recenter lat={center.lat} lon={center.lon} />
+      <FitToCourts center={center} courts={courts} />
 
       <CircleMarker
         center={[center.lat, center.lon]}
