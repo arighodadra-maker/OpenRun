@@ -12,6 +12,7 @@ export type Court = {
   indoor?: boolean;
   surface?: string;
   access?: string;
+  address?: string;
   osmUrl: string;
 };
 
@@ -24,7 +25,8 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // courts barely change — cache for an ho
 
 function cacheKey(lat: number, lon: number, r: number) {
   // Round to ~100m so tiny GPS jitter still hits the cache.
-  return `openrun.courts.${lat.toFixed(3)},${lon.toFixed(3)},${r}`;
+  // v2 = courts now include address; bump invalidates older cached shapes.
+  return `openrun.courts.v2.${lat.toFixed(3)},${lon.toFixed(3)},${r}`;
 }
 
 function readCache(key: string): Court[] | null {
@@ -70,29 +72,37 @@ export async function fetchCourts(
     );
     out center tags;
   `.trim();
+  const body = "data=" + encodeURIComponent(q);
 
-  let lastErr: unknown;
-  for (const url of OVERPASS_ENDPOINTS) {
+  // Query one endpoint, giving up after 18s (long enough for a big first query).
+  async function hit(url: string): Promise<Court[]> {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 18000);
     try {
-      // Abort a slow endpoint after 12s so we fail over instead of hanging.
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 12000);
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "data=" + encodeURIComponent(q),
+        body,
         signal: ctrl.signal,
-      }).finally(() => clearTimeout(timer));
+      });
       if (!res.ok) throw new Error("Overpass " + res.status);
       const data = await res.json();
-      const courts = normalize(data.elements ?? []);
-      writeCache(key, courts);
-      return courts;
-    } catch (e) {
-      lastErr = e;
+      return normalize(data.elements ?? []);
+    } finally {
+      clearTimeout(timer);
     }
   }
-  throw lastErr ?? new Error("Overpass unavailable");
+
+  try {
+    // Race both mirrors — whichever answers first wins, so one slow server
+    // doesn't hold everything up.
+    const courts = await Promise.any(OVERPASS_ENDPOINTS.map(hit));
+    writeCache(key, courts);
+    return courts;
+  } catch {
+    // Every mirror failed/timed out — surface a clean, friendly error.
+    throw new Error("Court search is slow right now. Tap “📍 my location” to try again.");
+  }
 }
 
 function normalize(elements: any[]): Court[] {
@@ -113,6 +123,7 @@ function normalize(elements: any[]): Court[] {
       indoor: tags.indoor === "yes" || tags.sport_indoor === "yes",
       surface: tags.surface,
       access: tags.access,
+      address: buildAddress(tags),
       osmUrl: `https://www.openstreetmap.org/${el.type}/${el.id}`,
     });
   }
@@ -131,6 +142,14 @@ function defaultName(tags: Record<string, string>): string {
   if (tags.amenity === "school") return "School court";
   if (tags.amenity === "community_centre") return "Community court";
   return "Basketball court";
+}
+
+/** Best available human-readable location from OSM tags (street/city or operator). */
+function buildAddress(tags: Record<string, string>): string | undefined {
+  const line1 = [tags["addr:housenumber"], tags["addr:street"]].filter(Boolean).join(" ");
+  const parts = [line1, tags["addr:city"] || tags["addr:suburb"]].filter(Boolean);
+  const addr = parts.join(", ");
+  return addr || tags.operator || undefined;
 }
 
 export function haversineMeters(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {

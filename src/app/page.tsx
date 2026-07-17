@@ -80,7 +80,7 @@ export default function Home() {
         );
         setCourts(cs);
       })
-      .catch((e) => setLocError(String(e)))
+      .catch((e) => setLocError(e?.message ?? "Couldn't load courts. Tap “📍 my location” to retry."))
       .finally(() => setLoading(false));
   }, [loc]);
 

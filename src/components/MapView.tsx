@@ -4,13 +4,29 @@ import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from "re
 import L from "leaflet";
 import { useEffect, useMemo } from "react";
 import type { Court } from "@/lib/courts";
-import { estimateBusyness, hourlyForecast } from "@/lib/busyness";
+import { estimateBusyness } from "@/lib/busyness";
 
 function Recenter({ lat, lon, zoom }: { lat: number; lon: number; zoom?: number }) {
   const map = useMap();
   useEffect(() => {
     map.setView([lat, lon], zoom ?? map.getZoom(), { animate: true });
   }, [lat, lon, zoom, map]);
+  return null;
+}
+
+// Leaflet renders blank if the container's size wasn't known at mount (common
+// inside flex/grid layouts). Recompute size once mounted and on resize.
+function FixSize() {
+  const map = useMap();
+  useEffect(() => {
+    const fix = () => map.invalidateSize();
+    const t = setTimeout(fix, 0);
+    window.addEventListener("resize", fix);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", fix);
+    };
+  }, [map]);
   return null;
 }
 
@@ -36,12 +52,30 @@ export default function MapView({
 }) {
   const now = useMemo(() => new Date(), []);
 
+  // Precompute markers so panning/selecting doesn't re-run busyness for each court.
+  const markers = useMemo(
+    () =>
+      courts.map((c) => {
+        const b = estimateBusyness(c, now);
+        return { c, b, icon: makeIcon(b.color, String(b.mid)) };
+      }),
+    [courts, now]
+  );
+
   return (
-    <MapContainer center={[center.lat, center.lon]} zoom={13} style={{ height: "100%", width: "100%" }}>
+    <MapContainer
+      center={[center.lat, center.lon]}
+      zoom={13}
+      style={{ height: "100%", width: "100%" }}
+      preferCanvas
+    >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        keepBuffer={6}
+        updateWhenZooming={false}
       />
+      <FixSize />
       <Recenter lat={center.lat} lon={center.lon} />
 
       <CircleMarker
@@ -52,42 +86,39 @@ export default function MapView({
         <Popup>You are here</Popup>
       </CircleMarker>
 
-      {courts.map((c) => {
-        const b = estimateBusyness(c, now);
-        const icon = makeIcon(b.color, String(b.mid));
-        return (
-          <Marker
-            key={c.id}
-            position={[c.lat, c.lon]}
-            icon={icon}
-            eventHandlers={{ click: () => onSelect?.(c) }}
-          >
-            <Popup>
-              <div className="text-sm">
-                <div className="font-semibold text-base">{c.name}</div>
-                <div className="mt-1" style={{ color: b.color }}>
-                  {b.label.toUpperCase()} · ~{b.low}–{b.high} players
-                </div>
-                <div className="mt-1 text-neutral-400">
-                  {c.hoops ? `${c.hoops} hoops` : "hoops unknown"}
-                  {c.lit ? " · lit" : ""}
-                  {c.covered ? " · covered" : ""}
-                  {c.indoor ? " · indoor" : ""}
-                  {c.surface ? ` · ${c.surface}` : ""}
-                </div>
-                <a
-                  href={c.osmUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-400 underline text-xs"
-                >
-                  view on OSM
-                </a>
+      {markers.map(({ c, b, icon }) => (
+        <Marker
+          key={c.id}
+          position={[c.lat, c.lon]}
+          icon={icon}
+          eventHandlers={{ click: () => onSelect?.(c) }}
+        >
+          <Popup>
+            <div className="text-sm">
+              <div className="font-semibold text-base">{c.name}</div>
+              {c.address && <div className="text-neutral-400 text-xs">{c.address}</div>}
+              <div className="mt-1" style={{ color: b.color }}>
+                {b.label.toUpperCase()} · ~{b.low}–{b.high} players
               </div>
-            </Popup>
-          </Marker>
-        );
-      })}
+              <div className="mt-1 text-neutral-400">
+                {c.hoops ? `${c.hoops} hoops` : "hoops unknown"}
+                {c.lit ? " · lit" : ""}
+                {c.covered ? " · covered" : ""}
+                {c.indoor ? " · indoor" : ""}
+                {c.surface ? ` · ${c.surface}` : ""}
+              </div>
+              <a
+                href={c.osmUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-400 underline text-xs"
+              >
+                view on OSM
+              </a>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
     </MapContainer>
   );
 }

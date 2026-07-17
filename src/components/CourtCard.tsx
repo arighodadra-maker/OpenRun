@@ -36,9 +36,12 @@ export default function CourtCard({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="font-semibold">{court.name}</div>
-          <div className="text-xs text-neutral-400">
+        <div className="min-w-0">
+          <div className="font-semibold truncate">{court.name}</div>
+          <div className="text-[10px] text-neutral-500 truncate">
+            {court.address ?? `${court.lat.toFixed(4)}, ${court.lon.toFixed(4)}`}
+          </div>
+          <div className="text-xs text-neutral-400 mt-0.5">
             {distMi.toFixed(1)} mi
             {court.hoops ? ` · ${court.hoops} hoops` : ""}
             {court.lit ? " · lit" : ""}
