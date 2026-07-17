@@ -2,21 +2,25 @@
 
 import type { Court } from "@/lib/courts";
 import { estimateBusyness, hourlyForecast } from "@/lib/busyness";
+import { weatherAt, type Weather } from "@/lib/weather";
 import { haversineMeters } from "@/lib/courts";
 
 export default function CourtCard({
   court,
   origin,
+  weather,
   onClick,
   selected,
 }: {
   court: Court;
   origin: { lat: number; lon: number };
+  weather?: Weather | null;
   onClick?: () => void;
   selected?: boolean;
 }) {
-  const b = estimateBusyness(court);
-  const forecast = hourlyForecast(court);
+  const now = new Date();
+  const b = estimateBusyness(court, now, weatherAt(weather, now));
+  const forecast = hourlyForecast(court, now, weather);
   const distMi = haversineMeters(origin, { lat: court.lat, lon: court.lon }) / 1609.34;
 
   return (

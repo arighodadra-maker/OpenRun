@@ -12,19 +12,53 @@ export type Court = {
   indoor?: boolean;
   surface?: string;
   access?: string;
+  school?: boolean;
   osmUrl: string;
 };
 
 const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
+
+// Court data changes rarely — cache per rounded location so revisits render
+// instantly instead of waiting out a 5-20s Overpass round trip.
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function cacheKey(lat: number, lon: number, radius: number): string {
+  return `openrun:courts:${lat.toFixed(3)},${lon.toFixed(3)},${radius}`;
+}
+
+function readCache(key: string): Court[] | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { at, courts } = JSON.parse(raw);
+    if (Date.now() - at > CACHE_TTL_MS) return null;
+    return courts;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key: string, courts: Court[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ at: Date.now(), courts }));
+  } catch {
+    // storage full/unavailable — not fatal
+  }
+}
 
 export async function fetchCourts(
   lat: number,
   lon: number,
   radiusMeters = 8000
 ): Promise<Court[]> {
+  const key = cacheKey(lat, lon, radiusMeters);
+  const cached = readCache(key);
+  if (cached) return cached;
   const q = `
     [out:json][timeout:20];
     (
@@ -44,10 +78,14 @@ export async function fetchCourts(
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "data=" + encodeURIComponent(q),
+        // Public mirrors sometimes hang for minutes — fail fast and move on.
+        signal: AbortSignal.timeout(20000),
       });
       if (!res.ok) throw new Error("Overpass " + res.status);
       const data = await res.json();
-      return normalize(data.elements ?? []);
+      const courts = normalize(data.elements ?? []);
+      writeCache(key, courts);
+      return courts;
     } catch (e) {
       lastErr = e;
     }
@@ -73,6 +111,10 @@ function normalize(elements: any[]): Court[] {
       indoor: tags.indoor === "yes" || tags.sport_indoor === "yes",
       surface: tags.surface,
       access: tags.access,
+      school:
+        tags.amenity === "school" ||
+        /\bschool\b/i.test(tags.name ?? "") ||
+        /\bschool\b/i.test(tags.operator ?? ""),
       osmUrl: `https://www.openstreetmap.org/${el.type}/${el.id}`,
     });
   }

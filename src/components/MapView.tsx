@@ -4,7 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap, useMapEve
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import type { Court } from "@/lib/courts";
-import { estimateBusyness, hourlyForecast, prominence, minProminenceForZoom } from "@/lib/busyness";
+import { estimateBusyness, prominence, minProminenceForZoom } from "@/lib/busyness";
+import { weatherAt, type Weather } from "@/lib/weather";
 
 function Recenter({ lat, lon, zoom }: { lat: number; lon: number; zoom?: number }) {
   const map = useMap();
@@ -37,15 +38,18 @@ function makeIcon(color: string, label: string) {
 export default function MapView({
   center,
   courts,
+  weather,
   selectedId,
   onSelect,
 }: {
   center: { lat: number; lon: number };
   courts: Court[];
+  weather?: Weather | null;
   selectedId?: string | null;
   onSelect?: (c: Court) => void;
 }) {
   const now = useMemo(() => new Date(), []);
+  const nowWeather = useMemo(() => weatherAt(weather, now), [weather, now]);
   const [zoom, setZoom] = useState(13);
   const minProm = minProminenceForZoom(zoom);
   const visible = useMemo(
@@ -78,7 +82,7 @@ export default function MapView({
       </CircleMarker>
 
       {visible.map((c) => {
-        const b = estimateBusyness(c, now);
+        const b = estimateBusyness(c, now, nowWeather);
         const icon = makeIcon(b.color, String(b.mid));
         return (
           <Marker

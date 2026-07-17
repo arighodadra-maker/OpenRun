@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCourts, haversineMeters, type Court } from "@/lib/courts";
+import { fetchWeather, type Weather } from "@/lib/weather";
 import CourtCard from "@/components/CourtCard";
 import AvailabilityGrid from "@/components/AvailabilityGrid";
 
@@ -16,6 +17,7 @@ export default function Home() {
   const [loc, setLoc] = useState<Loc | null>(null);
   const [locError, setLocError] = useState<string | null>(null);
   const [courts, setCourts] = useState<Court[]>([]);
+  const [weather, setWeather] = useState<Weather | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -41,6 +43,11 @@ export default function Home() {
 
   useEffect(() => {
     if (!loc) return;
+    // Live weather drives the outdoor-court busyness model; null falls back
+    // to the seasonal proxy inside estimateBusyness.
+    fetchWeather(loc.lat, loc.lon)
+      .then(setWeather)
+      .catch(() => setWeather(null));
     setLoading(true);
     fetchCourts(loc.lat, loc.lon, 10000)
       .then((cs) => {
@@ -61,8 +68,8 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-screen flex flex-col">
-      <header className="px-4 py-3 border-b border-neutral-900 flex items-center justify-between">
+    <main className="h-screen flex flex-col">
+      <header className="shrink-0 px-4 py-3 border-b border-neutral-900 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-full bg-court flex items-center justify-center text-black font-black">
             ▲
@@ -86,7 +93,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="flex-1 grid md:grid-cols-[380px_1fr] min-h-0">
+      <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_minmax(300px,40vh)] md:grid-rows-[minmax(0,1fr)] md:grid-cols-[380px_1fr]">
         <aside className="border-r border-neutral-900 flex flex-col min-h-0">
           <div className="p-3 border-b border-neutral-900">
             <div className="text-xs uppercase tracking-wider text-neutral-500 mb-1">
@@ -100,13 +107,14 @@ export default function Home() {
                 : "No courts found in this radius."}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
             {loc &&
               courts.map((c) => (
                 <CourtCard
                   key={c.id}
                   court={c}
                   origin={loc}
+                  weather={weather}
                   selected={selectedId === c.id}
                   onClick={() => setSelectedId(c.id)}
                 />
@@ -120,11 +128,12 @@ export default function Home() {
           </div>
         </aside>
 
-        <section className="min-h-[400px] md:min-h-0">
+        <section className="min-h-0 order-first md:order-none">
           {loc ? (
             <MapView
               center={selected ? { lat: selected.lat, lon: selected.lon } : loc}
               courts={courts}
+              weather={weather}
               selectedId={selectedId}
               onSelect={(c) => setSelectedId(c.id)}
             />
@@ -136,7 +145,7 @@ export default function Home() {
         </section>
       </div>
 
-      <footer className="text-[11px] text-neutral-600 px-4 py-2 border-t border-neutral-900">
+      <footer className="shrink-0 text-[11px] text-neutral-600 px-4 py-2 border-t border-neutral-900">
         Court data © OpenStreetMap contributors · Busyness values are heuristic estimates, not
         real-time occupancy.
       </footer>
